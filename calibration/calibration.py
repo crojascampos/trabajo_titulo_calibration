@@ -180,7 +180,7 @@ class Calibration:
                     accu_delta = average_table['pos_post_delta'].get(attr, 0)
                     average_table['pos_post_delta'][attr] = accu_delta + delta
 
-        self.average_table = average_table
+        self.average_table = average_table / len(self.worst_case)
 
         user_id = np.random.choice(self.worst_case)
 
