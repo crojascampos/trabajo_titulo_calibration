@@ -47,9 +47,6 @@ class Calibration:
 
         self.worst_case = None
 
-        self.average_table = None
-        self.single_table = None
-
     def set_config(self, model_name, attr_file, train_file, reco_file, top_k, lmbda):
         self.model_name = model_name
 
@@ -80,9 +77,6 @@ class Calibration:
         self.calib_distr = {}
 
         self.worst_case = []
-
-        self.average_table = None
-        self.single_table = None
 
     def prepare(self):
         top_k = self.top_k
@@ -123,97 +117,3 @@ class Calibration:
             calib_distr = compute_attr_distr(calib_items)
 
             self.calib_distr[user_id] = calib_distr
-
-    def generate_tables(self):
-
-        distr_dict = {
-            'inter_distr': self.inter_distr,
-            'recom_distr': self.recom_distr,
-            'calib_distr': self.calib_distr
-        }
-
-        average_table = {
-            'inter_distr': {},
-            'recom_distr': {},
-            'calib_distr': {},
-            'neg_pre_delta': {},
-            'pos_pre_delta': {},
-            'neg_post_delta': {},
-            'pos_post_delta': {},
-        }
-
-        for user_id in self.worst_case:
-            user_vals = {}
-
-            # Loops over the 3 distributions (interacted, recommended and calibrated)
-            for kind in set(distr_dict):
-                kind_distr = distr_dict[kind][user_id]
-
-                user_vals[kind] = {}
-
-                # Loops over the attributes of the user for this distribution
-                for attr in set(kind_distr):
-                    accu_val = average_table[kind].get(attr, 0)
-                    average_table[kind][attr] = accu_val + kind_distr[attr]
-
-                    user_vals[kind][attr] = kind_distr[attr]
-
-            # Gets the delta BEFORE the calibration separated into positive and negative
-            for attr in set(user_vals['inter_distr']) | set(user_vals['recom_distr']):
-                delta = user_vals['recom_distr'].get(
-                    attr, 0) - user_vals['inter_distr'].get(attr, 0)
-                if delta < 0:
-                    accu_delta = average_table['neg_pre_delta'].get(attr, 0)
-                    average_table['neg_pre_delta'][attr] = accu_delta + delta
-                else:
-                    accu_delta = average_table['pos_pre_delta'].get(attr, 0)
-                    average_table['pos_pre_delta'][attr] = accu_delta + delta
-
-            # Gets the delta AFTER the calibration separated into positive and negative
-            for attr in set(user_vals['inter_distr']) | set(user_vals['calib_distr']):
-                delta = user_vals['calib_distr'].get(
-                    attr, 0) - user_vals['inter_distr'].get(attr, 0)
-                if delta < 0:
-                    accu_delta = average_table['neg_post_delta'].get(attr, 0)
-                    average_table['neg_post_delta'][attr] = accu_delta + delta
-                else:
-                    accu_delta = average_table['pos_post_delta'].get(attr, 0)
-                    average_table['pos_post_delta'][attr] = accu_delta + delta
-
-        self.average_table = average_table / len(self.worst_case)
-
-        user_id = np.random.choice(self.worst_case)
-
-        user_inter_distr = distr_dict['inter_distr'][user_id]
-        user_inter_distr = {x: y for x,
-                            y in user_inter_distr.items() if y != 0}
-
-        user_recom_distr = distr_dict['recom_distr'][user_id]
-        user_recom_distr = {x: y for x,
-                            y in user_recom_distr.items() if y != 0}
-
-        user_calib_distr = distr_dict['calib_distr'][user_id]
-        user_calib_distr = {x: y for x,
-                            y in user_calib_distr.items() if y != 0}
-
-        single_table = {
-            'inter_distr': user_inter_distr,
-            'recom_distr': user_recom_distr,
-            'calib_distr': user_calib_distr,
-            'pre_delta': {key: user_recom_distr.get(key, 0) - user_inter_distr.get(key, 0) for key in user_inter_distr.keys() | user_recom_distr.keys()},
-            'post_delta': {key: user_calib_distr.get(key, 0) - user_inter_distr.get(key, 0) for key in user_inter_distr.keys() | user_calib_distr.keys()},
-            'recom_delta': {key: user_calib_distr.get(key, 0) - user_recom_distr.get(key, 0) for key in user_calib_distr.keys() | user_recom_distr.keys()}
-        }
-
-        self.single_table = single_table
-
-    def save_to_csv(self, save_path):
-        pd.DataFrame(self.inter_distr).to_csv(save_path + 'inter_distr.csv')
-        pd.DataFrame(self.recom_distr).to_csv(
-            save_path + 'recom_distr.csv')
-        pd.DataFrame(self.calib_distr).to_csv(
-            save_path + 'calib_distr.csv')
-        pd.DataFrame(self.single_table).to_csv(
-            save_path + 'single_table.csv')
-        pd.DataFrame(self.average_table).to_csv(
-            save_path + 'average_table.csv')
